@@ -6,6 +6,7 @@ import logging
 import db
 from analysis.sentiment import passes_sentiment_filter, get_sentiment_score
 from analysis.classifier import classify_post
+from task_manager import task_manager
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,16 @@ def run_pipeline(limit: int = 50) -> dict:
 
     if not posts:
         logger.info("No unanalyzed posts found.")
+        task_manager.update_progress("analyze", 0, "No new posts to analyze.")
         return stats
 
-    logger.info(f"Processing {len(posts)} unanalyzed posts with model={model}")
+    total = len(posts)
+    task_manager.start_task("analyze", total=total, message=f"Starting analysis of {total} posts...")
+    logger.info(f"Processing {total} unanalyzed posts with model={model}")
 
-    for post in posts:
+    for i, post in enumerate(posts):
         try:
+            task_manager.update_progress("analyze", i + 1, f"Analyzing post {i+1} of {total}...")
             content = post.get("content", "") or post.get("title", "")
             if not content.strip():
                 logger.debug(f"Skipping empty post {post['id']}")

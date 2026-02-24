@@ -6,6 +6,7 @@ import logging
 import threading
 from flask import Flask, render_template, jsonify, request
 import db
+from task_manager import task_manager
 
 logger = logging.getLogger(__name__)
 
@@ -139,25 +140,63 @@ def create_app() -> Flask:
                     except Exception as e:
                         logger.error(f"Mastodon: {e}")
 
+                    # Reddit (old collector)
+                    try:
+                        task_manager.update_progress("collect", 1, "Polling Reddit Subreddits...")
+                        from collectors import reddit_monitor
+                        stats = reddit_monitor.poll_subreddits(keywords)
+                        all_stats.append(stats)
+                    except Exception as e:
+                        logger.error(f"Reddit: {e}")
+
+                    # Apify
+                    try:
+                        task_manager.update_progress("collect", 2, "Running Apify Social Scrapers...")
+                        from collectors import apify_collector
+                        stats = apify_collector.collect_posts(keywords)
+                        all_stats.append(stats)
+                    except Exception as e:
+                        logger.error(f"Apify: {e}")
+
+                    # Hacker News
+                    try:
+                        task_manager.update_progress("collect", 3, "Checking Hacker News...")
+                        from collectors import hn_collector
+                        stats = hn_collector.collect_posts(keywords)
+                        all_stats.append(stats)
+                    except Exception as e:
+                        logger.error(f"Hacker News: {e}")
+
+                    # Mastodon
+                    try:
+                        task_manager.update_progress("collect", 4, "Scraping Mastodon...")
+                        from collectors import mastodon_collector
+                        stats = mastodon_collector.collect_posts(keywords)
+                        all_stats.append(stats)
+                    except Exception as e:
+                        logger.error(f"Mastodon: {e}")
+
                     # Dev.to
                     try:
+                        task_manager.update_progress("collect", 5, "Fetching from Dev.to...")
                         from collectors import devto_collector
                         stats = devto_collector.collect_posts(keywords)
                         all_stats.append(stats)
                     except Exception as e:
                         logger.error(f"Dev.to: {e}")
 
+                    task_manager.complete_task("collect", "Collection finished successfully", {"stats": all_stats})
                     logger.info(f"Background collect finished: {all_stats}")
                 except Exception as e:
+                    task_manager.fail_task("collect", str(e))
                     logger.error(f"Background collect error: {e}")
 
+            task_manager.start_task("collect", total=5, message="Starting collection process...")
             thread = threading.Thread(target=run, daemon=True)
             thread.start()
             return jsonify({
                 "status": "started",
                 "message": "Collection started across all platforms",
-                "platforms": ["reddit", "twitter", "linkedin", "facebook",
-                              "instagram", "hackernews", "mastodon", "devto"],
             })
         except Exception as e:
             logger.error(f"Error starting collection: {e}")
@@ -171,16 +210,25 @@ def create_app() -> Flask:
             def run():
                 try:
                     stats = run_pipeline()
+                    task_manager.complete_task("analyze", "Analysis finished successfully", stats)
                     logger.info(f"Background analysis finished: {stats}")
                 except Exception as e:
+                    task_manager.fail_task("analyze", str(e))
                     logger.error(f"Background analysis error: {e}")
 
+            task_manager.start_task("analyze", total=0, message="Preparing to analyze posts...")
             thread = threading.Thread(target=run, daemon=True)
             thread.start()
             return jsonify({"status": "started", "message": "Analysis started in background"})
         except Exception as e:
             logger.error(f"Error starting analysis: {e}")
             return jsonify({"error": str(e)}), 500
+
+    # ─── API: Task Status ──────────────────────────────
+    @app.route("/api/task-status")
+    def api_task_status():
+        task_type = request.args.get("type")
+        return jsonify(task_manager.get_status(task_type))
 
     # ─── API: Manual Import ────────────────────────────
     @app.route("/api/import", methods=["POST"])
