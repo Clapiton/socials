@@ -1,0 +1,311 @@
+from __future__ import annotations
+
+"""
+Apify-based collectors — scrape Reddit, Twitter/X, LinkedIn, Facebook, Instagram
+via Apify actors.  Only needs a single APIFY_API_TOKEN in .env.
+"""
+
+import os
+import time
+import logging
+import requests
+from datetime import datetime, timezone
+
+import db
+
+log = logging.getLogger(__name__)
+
+APIFY_TOKEN = os.getenv("APIFY_API_TOKEN", "")
+BASE_URL = "https://api.apify.com/v2"
+
+# ── Actor registry ───────────────────────────────────────────────────────────
+ACTORS = {
+    "reddit": {
+        "actor_id": "trudax/reddit-scraper",
+        "map": {  # Apify output field → raw_posts field
+            "title": "title",
+            "body": "content",
+            "author": "author",
+            "url": "url",
+            "score": "score",
+            "subreddit": "subreddit",
+        },
+    },
+    "twitter": {
+        "actor_id": "apidojo/tweet-scraper",
+        "map": {
+            "full_text": "content",
+            "user.screen_name": "author",
+            "tweet_url": "url",
+            "favorite_count": "score",
+        },
+    },
+    "linkedin": {
+        "actor_id": "anchor/linkedin-post-search-scraper",
+        "map": {
+            "text": "content",
+            "authorName": "author",
+            "url": "url",
+            "numLikes": "score",
+        },
+    },
+    "facebook": {
+        "actor_id": "apify/facebook-posts-scraper",
+        "map": {
+            "text": "content",
+            "userName": "author",
+            "url": "url",
+            "likes": "score",
+        },
+    },
+    "instagram": {
+        "actor_id": "apify/instagram-scraper",
+        "map": {
+            "caption": "content",
+            "ownerUsername": "author",
+            "url": "url",
+            "likesCount": "score",
+        },
+    },
+}
+
+
+def _headers() -> dict:
+    return {"Authorization": f"Bearer {APIFY_TOKEN}", "Content-Type": "application/json"}
+
+
+def _run_actor(actor_id: str, run_input: dict, timeout: int = 120) -> list[dict]:
+    """Start an Apify actor, wait for it, and return dataset items."""
+    url = f"{BASE_URL}/acts/{actor_id}/runs"
+    log.info("Starting Apify actor %s", actor_id)
+
+    resp = requests.post(url, json=run_input, headers=_headers(), params={"timeout": timeout})
+    resp.raise_for_status()
+    run_data = resp.json()["data"]
+    run_id = run_data["id"]
+    dataset_id = run_data.get("defaultDatasetId")
+
+    # Poll for completion
+    status = run_data.get("status", "RUNNING")
+    poll_url = f"{BASE_URL}/acts/{actor_id}/runs/{run_id}"
+    elapsed = 0
+    while status in ("RUNNING", "READY") and elapsed < timeout:
+        time.sleep(5)
+        elapsed += 5
+        r = requests.get(poll_url, headers=_headers())
+        r.raise_for_status()
+        status = r.json()["data"]["status"]
+        dataset_id = r.json()["data"].get("defaultDatasetId", dataset_id)
+
+    if status != "SUCCEEDED":
+        log.warning("Actor %s finished with status: %s", actor_id, status)
+        return []
+
+    # Fetch dataset
+    ds_url = f"{BASE_URL}/datasets/{dataset_id}/items"
+    r = requests.get(ds_url, headers=_headers(), params={"limit": 100})
+    r.raise_for_status()
+    return r.json()
+
+
+def _nested_get(obj: dict, dotted_key: str):
+    """Get a nested value like 'user.screen_name' from a dict."""
+    keys = dotted_key.split(".")
+    val = obj
+    for k in keys:
+        if isinstance(val, dict):
+            val = val.get(k)
+        else:
+            return None
+    return val
+
+
+def _map_to_post(item: dict, platform: str, field_map: dict) -> dict:
+    """Map an Apify result item to our raw_posts schema."""
+    post = {
+        "platform": platform,
+        "title": "",
+        "content": "",
+        "author": "",
+        "url": "",
+        "score": 0,
+        "subreddit": "",
+    }
+    for apify_field, our_field in field_map.items():
+        val = _nested_get(item, apify_field)
+        if val is not None:
+            post[our_field] = val
+    return post
+
+
+def _matches_keywords(text: str, keywords: list[str]) -> bool:
+    """Check if text matches any frustration keyword."""
+    text_lower = text.lower()
+    return any(kw.lower() in text_lower for kw in keywords)
+
+
+# ── Platform-specific collect functions ──────────────────────────────────────
+
+def collect_reddit(keywords: list[str], subreddits: list[str], limit: int = 25) -> dict:
+    """Collect Reddit posts via Apify."""
+    if not APIFY_TOKEN:
+        log.warning("APIFY_API_TOKEN not set — skipping Reddit (Apify)")
+        return {"platform": "reddit", "source": "apify", "posts_inserted": 0, "skipped": True}
+
+    actor = ACTORS["reddit"]
+    run_input = {
+        "startUrls": [{"url": f"https://www.reddit.com/r/{sub}/new/"} for sub in subreddits],
+        "maxItems": limit * len(subreddits),
+        "sort": "new",
+    }
+
+    try:
+        items = _run_actor(actor["actor_id"], run_input)
+    except Exception as e:
+        log.error("Reddit Apify error: %s", e)
+        return {"platform": "reddit", "source": "apify", "posts_inserted": 0, "error": str(e)}
+
+    return _process_items(items, "reddit", actor["map"], keywords)
+
+
+def collect_twitter(keywords: list[str], limit: int = 25) -> dict:
+    """Collect tweets via Apify."""
+    if not APIFY_TOKEN:
+        log.warning("APIFY_API_TOKEN not set — skipping Twitter")
+        return {"platform": "twitter", "source": "apify", "posts_inserted": 0, "skipped": True}
+
+    actor = ACTORS["twitter"]
+    search_query = " OR ".join(keywords[:5])  # Twitter search supports OR
+    run_input = {
+        "searchTerms": [search_query],
+        "maxTweets": limit,
+        "sort": "Latest",
+    }
+
+    try:
+        items = _run_actor(actor["actor_id"], run_input)
+    except Exception as e:
+        log.error("Twitter Apify error: %s", e)
+        return {"platform": "twitter", "source": "apify", "posts_inserted": 0, "error": str(e)}
+
+    return _process_items(items, "twitter", actor["map"], keywords)
+
+
+def collect_linkedin(keywords: list[str], limit: int = 25) -> dict:
+    """Collect LinkedIn posts via Apify."""
+    if not APIFY_TOKEN:
+        log.warning("APIFY_API_TOKEN not set — skipping LinkedIn")
+        return {"platform": "linkedin", "source": "apify", "posts_inserted": 0, "skipped": True}
+
+    actor = ACTORS["linkedin"]
+    run_input = {
+        "searchTerms": keywords[:5],
+        "maxResults": limit,
+    }
+
+    try:
+        items = _run_actor(actor["actor_id"], run_input)
+    except Exception as e:
+        log.error("LinkedIn Apify error: %s", e)
+        return {"platform": "linkedin", "source": "apify", "posts_inserted": 0, "error": str(e)}
+
+    return _process_items(items, "linkedin", actor["map"], keywords)
+
+
+def collect_facebook(keywords: list[str], limit: int = 25) -> dict:
+    """Collect Facebook group posts via Apify."""
+    if not APIFY_TOKEN:
+        log.warning("APIFY_API_TOKEN not set — skipping Facebook")
+        return {"platform": "facebook", "source": "apify", "posts_inserted": 0, "skipped": True}
+
+    actor = ACTORS["facebook"]
+    run_input = {
+        "searchTerms": keywords[:5],
+        "maxPosts": limit,
+    }
+
+    try:
+        items = _run_actor(actor["actor_id"], run_input)
+    except Exception as e:
+        log.error("Facebook Apify error: %s", e)
+        return {"platform": "facebook", "source": "apify", "posts_inserted": 0, "error": str(e)}
+
+    return _process_items(items, "facebook", actor["map"], keywords)
+
+
+def collect_instagram(keywords: list[str], limit: int = 25) -> dict:
+    """Collect Instagram posts via Apify."""
+    if not APIFY_TOKEN:
+        log.warning("APIFY_API_TOKEN not set — skipping Instagram")
+        return {"platform": "instagram", "source": "apify", "posts_inserted": 0, "skipped": True}
+
+    actor = ACTORS["instagram"]
+    hashtags = [kw.replace(" ", "") for kw in keywords[:5]]
+    run_input = {
+        "hashtags": hashtags,
+        "resultsLimit": limit,
+    }
+
+    try:
+        items = _run_actor(actor["actor_id"], run_input)
+    except Exception as e:
+        log.error("Instagram Apify error: %s", e)
+        return {"platform": "instagram", "source": "apify", "posts_inserted": 0, "error": str(e)}
+
+    return _process_items(items, "instagram", actor["map"], keywords)
+
+
+# ── Shared processing ───────────────────────────────────────────────────────
+
+def _process_items(items: list[dict], platform: str, field_map: dict, keywords: list[str]) -> dict:
+    """Map, filter, deduplicate, and insert Apify results."""
+    inserted = 0
+    duplicates = 0
+    filtered = 0
+
+    for item in items:
+        post = _map_to_post(item, platform, field_map)
+        full_text = f"{post.get('title', '')} {post.get('content', '')}"
+
+        if not full_text.strip():
+            filtered += 1
+            continue
+
+        if keywords and not _matches_keywords(full_text, keywords):
+            filtered += 1
+            continue
+
+        try:
+            result = db.insert_raw_post(post)
+            if result:
+                inserted += 1
+            else:
+                duplicates += 1
+        except Exception as e:
+            if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+                duplicates += 1
+            else:
+                log.error("Error inserting %s post: %s", platform, e)
+
+    log.info("%s (Apify): %d items → %d inserted, %d duplicates, %d filtered",
+             platform, len(items), inserted, duplicates, filtered)
+
+    return {
+        "platform": platform,
+        "source": "apify",
+        "items_fetched": len(items),
+        "posts_inserted": inserted,
+        "duplicates_skipped": duplicates,
+        "filtered_out": filtered,
+    }
+
+
+def collect_all(keywords: list[str], subreddits: list[str] | None = None, limit: int = 25) -> list[dict]:
+    """Run all Apify collectors and return combined results."""
+    results = []
+    results.append(collect_reddit(keywords, subreddits or ["freelance"], limit))
+    results.append(collect_twitter(keywords, limit))
+    results.append(collect_linkedin(keywords, limit))
+    results.append(collect_facebook(keywords, limit))
+    results.append(collect_instagram(keywords, limit))
+    return results

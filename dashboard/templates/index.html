@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Listener — Lead Monitor</title>
+    <meta name="description" content="AI-powered social listening dashboard for lead generation">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <span class="logo-icon">📡</span>
+                <h1>Social Listener</h1>
+            </div>
+            <span class="header-badge">Phase 1</span>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-secondary" id="btn-collect" onclick="triggerCollect()">
+                <span class="btn-icon">🔍</span> Collect Now
+            </button>
+            <button class="btn btn-secondary" id="btn-analyze" onclick="triggerAnalyze()">
+                <span class="btn-icon">🧠</span> Analyze Now
+            </button>
+            <div class="auto-refresh-indicator" id="refresh-indicator">
+                <span class="pulse-dot"></span> Auto-refresh
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs">
+        <button class="tab active" data-tab="overview" onclick="switchTab('overview')">
+            <span class="tab-icon">📊</span> Overview
+        </button>
+        <button class="tab" data-tab="posts" onclick="switchTab('posts')">
+            <span class="tab-icon">📝</span> Posts Feed
+        </button>
+        <button class="tab" data-tab="leads" onclick="switchTab('leads')">
+            <span class="tab-icon">🔥</span> Leads
+        </button>
+        <button class="tab" data-tab="outreach" onclick="switchTab('outreach')">
+            <span class="tab-icon">📤</span> Outreach
+        </button>
+        <button class="tab" data-tab="import" onclick="switchTab('import')">
+            <span class="tab-icon">📥</span> Import
+        </button>
+        <button class="tab" data-tab="settings" onclick="switchTab('settings')">
+            <span class="tab-icon">⚙️</span> Settings
+        </button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content">
+
+        <!-- Overview Tab -->
+        <section id="tab-overview" class="tab-content active">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📝</div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-posts">—</span>
+                        <span class="stat-label">Posts Collected</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔬</div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-analyzed">—</span>
+                        <span class="stat-label">Posts Analyzed</span>
+                    </div>
+                </div>
+                <div class="stat-card accent">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-leads">—</span>
+                        <span class="stat-label">Qualified Leads</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📤</div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-outreach">—</span>
+                        <span class="stat-label">Outreach Sent</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">💬</div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-response-rate">—</span>
+                        <span class="stat-label">Response Rate</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overview-panels">
+                <div class="panel">
+                    <h3 class="panel-title">Recent Leads</h3>
+                    <div id="recent-leads-list" class="panel-body">
+                        <p class="empty-state">Loading...</p>
+                    </div>
+                </div>
+                <div class="panel">
+                    <h3 class="panel-title">Latest Posts</h3>
+                    <div id="recent-posts-list" class="panel-body">
+                        <p class="empty-state">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Posts Feed Tab -->
+        <section id="tab-posts" class="tab-content">
+            <div class="table-header">
+                <h2>Collected Posts</h2>
+                <div class="table-controls">
+                    <select id="posts-filter-platform" onchange="loadPosts()">
+                        <option value="">All Platforms</option>
+                        <option value="reddit">Reddit</option>
+                        <option value="twitter">Twitter/X</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="hackernews">Hacker News</option>
+                        <option value="mastodon">Mastodon</option>
+                        <option value="devto">Dev.to</option>
+                        <option value="manual">Manual Import</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="posts-table">
+                    <thead>
+                        <tr>
+                            <th>Platform</th>
+                            <th>Subreddit</th>
+                            <th>Author</th>
+                            <th>Title</th>
+                            <th>Score</th>
+                            <th>Collected</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="posts-tbody">
+                        <tr>
+                            <td colspan="7" class="empty-state">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <button class="btn btn-small" onclick="loadPosts('prev')" id="posts-prev" disabled>← Previous</button>
+                <span class="page-info" id="posts-page-info">Page 1</span>
+                <button class="btn btn-small" onclick="loadPosts('next')" id="posts-next">Next →</button>
+            </div>
+        </section>
+
+        <!-- Leads Tab -->
+        <section id="tab-leads" class="tab-content">
+            <div class="table-header">
+                <h2>Qualified Leads</h2>
+                <p class="table-subtitle">Posts flagged as frustrated with high confidence</p>
+            </div>
+            <div class="table-container">
+                <table id="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Confidence</th>
+                            <th>Author</th>
+                            <th>Post</th>
+                            <th>Reason</th>
+                            <th>Service</th>
+                            <th>Sentiment</th>
+                            <th>Link</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leads-tbody">
+                        <tr>
+                            <td colspan="8" class="empty-state">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <button class="btn btn-small" onclick="loadLeads('prev')" id="leads-prev" disabled>← Previous</button>
+                <span class="page-info" id="leads-page-info">Page 1</span>
+                <button class="btn btn-small" onclick="loadLeads('next')" id="leads-next">Next →</button>
+            </div>
+        </section>
+
+        <!-- Outreach Tab -->
+        <section id="tab-outreach" class="tab-content">
+            <div class="table-header">
+                <h2>Outreach Log</h2>
+                <p class="table-subtitle">History of sent messages and responses</p>
+            </div>
+            <div class="table-container">
+                <table id="outreach-table">
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>Status</th>
+                            <th>Message</th>
+                            <th>Response</th>
+                            <th>Sent At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="outreach-tbody">
+                        <tr>
+                            <td colspan="5" class="empty-state">No outreach data yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Import Tab -->
+        <section id="tab-import" class="tab-content">
+            <div class="settings-container">
+                <h2>Manual Import</h2>
+                <p class="settings-subtitle">Paste text or CSV data to import posts for analysis. Great for testing
+                    without API keys.</p>
+
+                <div class="settings-grid">
+                    <div class="setting-card full-width">
+                        <div class="setting-header">
+                            <span class="setting-icon">📝</span>
+                            <label>Import Mode</label>
+                        </div>
+                        <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem">
+                            <button type="button" class="btn btn-small import-mode-btn active"
+                                onclick="setImportMode('text')" id="import-mode-text">Raw Text</button>
+                            <button type="button" class="btn btn-small import-mode-btn" onclick="setImportMode('csv')"
+                                id="import-mode-csv">CSV Data</button>
+                        </div>
+
+                        <div id="import-text-panel">
+                            <textarea id="import-text" class="setting-input" rows="8"
+                                placeholder="Paste a social media post, comment, or any text you want to analyze for frustration..."></textarea>
+                            <div style="display:flex; gap:0.5rem; margin-top:0.5rem">
+                                <input type="text" id="import-author" class="setting-input"
+                                    placeholder="Author (optional)" style="max-width:200px">
+                                <input type="text" id="import-label" class="setting-input"
+                                    placeholder="Source label (optional)" style="max-width:200px">
+                            </div>
+                        </div>
+
+                        <div id="import-csv-panel" style="display:none">
+                            <textarea id="import-csv" class="setting-input" rows="8"
+                                placeholder="content,author,platform,url&#10;I hate this tool so much,john_doe,reddit,https://...&#10;Why is everything broken,jane,twitter,https://..."></textarea>
+                            <p class="setting-description" style="margin-top:0.5rem">Required column: content (or
+                                text/body/post). Optional: title, author, platform, url, subreddit</p>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="submitImport()"
+                            style="margin-top:0.75rem">
+                            <span class="btn-icon">📥</span> Import & Analyze
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Tab -->
+        <section id="tab-settings" class="tab-content">
+            <div class="settings-container">
+                <h2>System Settings</h2>
+                <p class="settings-subtitle">Configure monitoring, analysis, and outreach parameters. Changes are saved
+                    to the database.</p>
+
+                <form id="settings-form" onsubmit="saveSettings(event)">
+                    <div class="settings-grid">
+                        <!-- Subreddits -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">📡</span>
+                                <label for="setting-subreddits">Monitored Subreddits</label>
+                            </div>
+                            <p class="setting-description">Comma-separated list of subreddits to monitor (without r/)
+                            </p>
+                            <div class="tag-input-container" id="subreddits-tags" data-key="subreddits">
+                                <div class="tags-wrapper" id="subreddits-tags-wrapper"></div>
+                                <input type="text" class="tag-input" id="setting-subreddits"
+                                    placeholder="Type and press Enter to add...">
+                            </div>
+                        </div>
+
+                        <!-- Services -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">🛠️</span>
+                                <label for="setting-services">Your Services</label>
+                            </div>
+                            <p class="setting-description">Services you offer (used for AI to suggest matching services)
+                            </p>
+                            <div class="tag-input-container" id="services-tags" data-key="services">
+                                <div class="tags-wrapper" id="services-tags-wrapper"></div>
+                                <input type="text" class="tag-input" id="setting-services"
+                                    placeholder="Type and press Enter to add...">
+                            </div>
+                        </div>
+
+                        <!-- Frustration Keywords -->
+                        <div class="setting-card full-width">
+                            <div class="setting-header">
+                                <span class="setting-icon">🔑</span>
+                                <label for="setting-keywords">Frustration Keywords</label>
+                            </div>
+                            <p class="setting-description">Keywords used for pre-filtering posts before AI analysis</p>
+                            <div class="tag-input-container" id="keywords-tags" data-key="frustration_keywords">
+                                <div class="tags-wrapper" id="keywords-tags-wrapper"></div>
+                                <input type="text" class="tag-input" id="setting-keywords"
+                                    placeholder="Type and press Enter to add...">
+                            </div>
+                        </div>
+
+                        <!-- Confidence Threshold -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">🎯</span>
+                                <label for="setting-threshold">Confidence Threshold</label>
+                            </div>
+                            <p class="setting-description">Minimum AI confidence to qualify as a lead (0.0 – 1.0)</p>
+                            <div class="slider-container">
+                                <input type="range" id="setting-threshold" min="0" max="1" step="0.05" value="0.8"
+                                    oninput="updateSliderLabel(this)">
+                                <span class="slider-value" id="threshold-value">0.80</span>
+                            </div>
+                        </div>
+
+                        <!-- Sentiment Threshold -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">😤</span>
+                                <label for="setting-sentiment">Sentiment Threshold</label>
+                            </div>
+                            <p class="setting-description">VADER compound score cutoff. Posts below this pass to LLM
+                                (-1.0 to 0.0)</p>
+                            <div class="slider-container">
+                                <input type="range" id="setting-sentiment" min="-1" max="0" step="0.05" value="-0.05"
+                                    oninput="updateSliderLabel(this)">
+                                <span class="slider-value" id="sentiment-value">-0.05</span>
+                            </div>
+                        </div>
+
+                        <!-- LLM Model -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">🤖</span>
+                                <label for="setting-model">LLM Model</label>
+                            </div>
+                            <p class="setting-description">OpenAI model for frustration classification</p>
+                            <select id="setting-model" class="setting-select">
+                                <option value="gpt-4o-mini">GPT-4o Mini (fast, cheap)</option>
+                                <option value="gpt-4o">GPT-4o (most accurate)</option>
+                                <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+                                <option value="gpt-4.1">GPT-4.1</option>
+                            </select>
+                        </div>
+
+                        <!-- Poll Interval -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">⏱️</span>
+                                <label for="setting-interval">Poll Interval (minutes)</label>
+                            </div>
+                            <p class="setting-description">How often to check for new posts (when using scheduler)</p>
+                            <input type="number" id="setting-interval" class="setting-input" min="1" max="120"
+                                value="10">
+                        </div>
+
+                        <!-- Mastodon Instances -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <span class="setting-icon">🐘</span>
+                                <label for="setting-mastodon">Mastodon Instances</label>
+                            </div>
+                            <p class="setting-description">Mastodon servers to poll (public timeline, no auth needed)
+                            </p>
+                            <div class="tag-input-container" id="mastodon-tags" data-key="mastodon_instances">
+                                <div class="tags-wrapper" id="mastodon-tags-wrapper"></div>
+                                <input type="text" class="tag-input" id="setting-mastodon"
+                                    placeholder="e.g. mastodon.social">
+                            </div>
+                        </div>
+
+                        <!-- n8n Webhook URL -->
+                        <div class="setting-card full-width">
+                            <div class="setting-header">
+                                <span class="setting-icon">🔗</span>
+                                <label for="setting-n8n">n8n Webhook URL</label>
+                            </div>
+                            <p class="setting-description">Paste your n8n webhook URL here. When a lead is found, we'll send it to n8n which creates a Gmail draft. Leave empty to disable.</p>
+                            <input type="url" id="setting-n8n" class="setting-input" placeholder="https://your-n8n.app/webhook/social-listener-lead">
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button type="submit" class="btn btn-primary btn-large">
+                            <span class="btn-icon">💾</span> Save Settings
+                        </button>
+                        <span class="save-status" id="save-status"></span>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+
+    <!-- Outreach Message Modal -->
+    <div class="modal-overlay" id="outreach-modal" style="display:none">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>📧 Outreach Message Preview</h3>
+                <button class="btn btn-small" onclick="closeOutreachModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <label class="setting-description">Subject</label>
+                <input type="text" id="modal-subject" class="setting-input" readonly>
+                <label class="setting-description" style="margin-top:0.75rem">Body</label>
+                <textarea id="modal-body" class="setting-input" rows="10" readonly></textarea>
+            </div>
+            <div class="modal-footer">
+                <span class="setting-description" id="modal-status"></span>
+                <button class="btn btn-primary" onclick="confirmSendOutreach()">
+                    <span class="btn-icon">📥</span> Save as Draft
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
