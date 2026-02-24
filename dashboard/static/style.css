@@ -1102,3 +1102,86 @@ input[type="range"]::-webkit-slider-thumb:hover {
     border-top: 1px solid var(--border);
     gap: 0.75rem;
 }
+
+/* Task Status Bar */
+.task-status-bar {
+    position: fixed;
+    bottom: -80px;
+    /* Hidden by default */
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: rgba(26, 27, 30, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+    transition: bottom 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+    display: flex;
+    align-items: center;
+    padding: 0 2rem;
+}
+
+.task-status-bar.active {
+    bottom: 0;
+}
+
+.task-status-content {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.task-status-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 250px;
+}
+
+.task-status-message {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.task-status-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--primary-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.task-status-progress-wrapper {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.task-status-progress-bar {
+    height: 100%;
+    background: var(--primary-accent);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.task-status-percent {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-accent);
+    min-width: 40px;
+    text-align: right;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

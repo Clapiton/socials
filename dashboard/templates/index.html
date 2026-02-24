@@ -398,8 +398,10 @@
                                 <span class="setting-icon">🔗</span>
                                 <label for="setting-n8n">n8n Webhook URL</label>
                             </div>
-                            <p class="setting-description">Paste your n8n webhook URL here. When a lead is found, we'll send it to n8n which creates a Gmail draft. Leave empty to disable.</p>
-                            <input type="url" id="setting-n8n" class="setting-input" placeholder="https://your-n8n.app/webhook/social-listener-lead">
+                            <p class="setting-description">Paste your n8n webhook URL here. When a lead is found, we'll
+                                send it to n8n which creates a Gmail draft. Leave empty to disable.</p>
+                            <input type="url" id="setting-n8n" class="setting-input"
+                                placeholder="https://your-n8n.app/webhook/social-listener-lead">
                         </div>
                     </div>
 
@@ -414,6 +416,20 @@
         </section>
 
     </main>
+
+    <!-- Task Status Bar -->
+    <div class="task-status-bar" id="task-status-bar">
+        <div class="task-status-content">
+            <div class="task-status-info">
+                <span class="task-status-spinner"></span>
+                <span class="task-status-message" id="task-status-message">Ready</span>
+            </div>
+            <div class="task-status-progress-wrapper">
+                <div class="task-status-progress-bar" id="task-status-progress-bar" style="width: 0%"></div>
+            </div>
+            <span class="task-status-percent" id="task-status-percent">0%</span>
+        </div>
+    </div>
 
     <!-- Toast Notification -->
     <div class="toast-container" id="toast-container"></div>

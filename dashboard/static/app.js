@@ -8,6 +8,8 @@ let postsPage = 0;
 let leadsPage = 0;
 const PAGE_SIZE = 25;
 let refreshInterval = null;
+let taskPollingInterval = null;
+let activeTaskType = null;
 
 // ─── Init ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,6 +48,59 @@ function startAutoRefresh() {
         else if (currentTab === 'outreach') loadOutreach();
         // Don't auto-refresh settings to avoid overwriting user edits
     }, 30000);
+}
+
+// ─── Task Status Polling ───────────────────────────
+function startTaskPolling(type) {
+    if (taskPollingInterval) clearInterval(taskPollingInterval);
+    activeTaskType = type;
+
+    const statusBar = document.getElementById('task-status-bar');
+    statusBar.classList.add('active');
+
+    taskPollingInterval = setInterval(async () => {
+        try {
+            const status = await fetchAPI(`/api/task-status?type=${type}`);
+
+            if (status.status === 'running') {
+                updateTaskUI(status.message, status.percent);
+            } else if (status.status === 'completed') {
+                updateTaskUI(status.message, 100);
+                clearInterval(taskPollingInterval);
+                taskPollingInterval = null;
+                showToast(status.message, 'success');
+
+                // Refresh data based on task
+                if (type === 'collect') loadPosts();
+                else if (type === 'analyze') {
+                    loadLeads();
+                    loadOverview();
+                }
+
+                setTimeout(() => statusBar.classList.remove('active'), 3000);
+            } else if (status.status === 'failed') {
+                updateTaskUI(status.message, 0);
+                clearInterval(taskPollingInterval);
+                taskPollingInterval = null;
+                showToast(status.message, 'error');
+                setTimeout(() => statusBar.classList.remove('active'), 5000);
+            } else {
+                // Idle or unknown
+                statusBar.classList.remove('active');
+                clearInterval(taskPollingInterval);
+                taskPollingInterval = null;
+            }
+        } catch (err) {
+            console.error('Task polling error:', err);
+            clearInterval(taskPollingInterval);
+        }
+    }, 1000);
+}
+
+function updateTaskUI(message, percent) {
+    document.getElementById('task-status-message').textContent = message;
+    document.getElementById('task-status-progress-bar').style.width = `${percent}%`;
+    document.getElementById('task-status-percent').textContent = `${percent}%`;
 }
 
 // ─── Overview ──────────────────────────────────────
@@ -322,40 +377,22 @@ function updateSliderLabel(slider) {
 
 // ─── Trigger Actions ───────────────────────────────
 async function triggerCollect() {
-    const btn = document.getElementById('btn-collect');
-    btn.classList.add('loading');
-    btn.querySelector('.btn-icon').textContent = '⏳';
-
     try {
-        await fetchAPI('/api/collect', { method: 'POST' });
-        showToast('🔍 Collection started across all platforms', 'info');
-        setTimeout(() => loadOverview(), 5000); // Refresh after a delay
+        const res = await fetchAPI('/api/collect', { method: 'POST' });
+        showToast(res.message);
+        startTaskPolling('collect');
     } catch (err) {
-        showToast('❌ Failed to start collection', 'error');
-    } finally {
-        setTimeout(() => {
-            btn.classList.remove('loading');
-            btn.querySelector('.btn-icon').textContent = '🔍';
-        }, 3000);
+        showToast('Failed to start collection', 'error');
     }
 }
 
 async function triggerAnalyze() {
-    const btn = document.getElementById('btn-analyze');
-    btn.classList.add('loading');
-    btn.querySelector('.btn-icon').textContent = '⏳';
-
     try {
-        await fetchAPI('/api/analyze', { method: 'POST' });
-        showToast('🧠 Analysis started in background', 'info');
-        setTimeout(() => loadOverview(), 10000); // Refresh after a delay
+        const res = await fetchAPI('/api/analyze', { method: 'POST' });
+        showToast(res.message);
+        startTaskPolling('analyze');
     } catch (err) {
-        showToast('❌ Failed to start analysis', 'error');
-    } finally {
-        setTimeout(() => {
-            btn.classList.remove('loading');
-            btn.querySelector('.btn-icon').textContent = '🧠';
-        }, 5000);
+        showToast('Failed to start analysis', 'error');
     }
 }
 
