@@ -9,6 +9,7 @@ import csv
 import io
 import logging
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import db
 
@@ -29,6 +30,7 @@ def import_text(text: str, author: str = "manual", source_label: str = "") -> di
 
     post_data = {
         "platform": "manual",
+        "post_id": f"manual-{uuid4().hex[:12]}",
         "title": source_label or "Manual import",
         "content": text[:5000],
         "author": author,
@@ -88,6 +90,7 @@ def import_csv(csv_text: str) -> dict:
 
         post_data = {
             "platform": row.get(platform_col, "manual").strip() if platform_col else "manual",
+            "post_id": f"csv-{uuid4().hex[:12]}",
             "title": row.get(title_col, "").strip()[:500] if title_col else "",
             "content": content[:5000],
             "author": row.get(author_col, "").strip() if author_col else "",
