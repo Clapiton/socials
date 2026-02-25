@@ -91,10 +91,15 @@ def create_app() -> Flask:
             logger.error(f"Error updating settings: {e}")
             return jsonify({"error": str(e)}), 500
 
-    # ─── API: Trigger Collect (all platforms) ──────────
+    # ─── API: Trigger Collect (selected platforms) ──────
     @app.route("/api/collect", methods=["POST"])
     def api_collect():
         try:
+            data = request.get_json() or {}
+            # Accept a list of sources; default to all if none specified
+            all_sources = ["reddit", "hackernews", "mastodon", "devto", "apify"]
+            sources = data.get("sources", all_sources)
+
             def run():
                 try:
                     settings = db.get_settings()
@@ -104,77 +109,64 @@ def create_app() -> Flask:
                     subreddits = [s.strip() for s in subreddits_raw.split(",") if s.strip()]
 
                     all_stats = []
+                    step = 0
+                    total = len(sources)
 
                     # Reddit (PRAW)
-                    try:
-                        from collectors.reddit_collector import collect_posts, is_configured
-                        if is_configured():
-                            stats = collect_posts()
-                            all_stats.append({"platform": "reddit", "source": "praw", **stats})
-                    except Exception as e:
-                        logger.error(f"Reddit PRAW: {e}")
+                    if "reddit" in sources:
+                        step += 1
+                        try:
+                            task_manager.update_progress("collect", step, "Polling Reddit...")
+                            from collectors.reddit_collector import collect_posts, is_configured
+                            if is_configured():
+                                stats = collect_posts()
+                                all_stats.append({"platform": "reddit", "source": "praw", **stats})
+                        except Exception as e:
+                            logger.error(f"Reddit PRAW: {e}")
 
-                    # Apify (Reddit, Twitter, LinkedIn, Facebook, Instagram)
-                    try:
-                        from collectors import apify_collector
-                        results = apify_collector.collect_all(keywords, subreddits)
-                        all_stats.extend(results)
-                    except Exception as e:
-                        logger.error(f"Apify: {e}")
-
-                    # Hacker News
-                    try:
-                        from collectors import hackernews_collector
-                        stats = hackernews_collector.collect_posts(keywords)
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"HN: {e}")
-
-
-                    # Reddit (old collector)
-                    try:
-                        task_manager.update_progress("collect", 1, "Polling Reddit Subreddits...")
-                        from collectors import reddit_collector
-                        stats = reddit_collector.collect_posts()
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"Reddit: {e}")
-
-                    # Apify
-                    try:
-                        task_manager.update_progress("collect", 2, "Running Apify Social Scrapers...")
-                        from collectors import apify_collector
-                        stats = apify_collector.collect_posts(keywords)
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"Apify: {e}")
+                    # Apify (Twitter, LinkedIn, Facebook, Instagram)
+                    if "apify" in sources:
+                        step += 1
+                        try:
+                            task_manager.update_progress("collect", step, "Running Apify scrapers...")
+                            from collectors import apify_collector
+                            results = apify_collector.collect_all(keywords, subreddits)
+                            all_stats.extend(results)
+                        except Exception as e:
+                            logger.error(f"Apify: {e}")
 
                     # Hacker News
-                    try:
-                        task_manager.update_progress("collect", 3, "Checking Hacker News...")
-                        from collectors import hackernews_collector
-                        stats = hackernews_collector.collect_posts(keywords)
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"Hacker News: {e}")
+                    if "hackernews" in sources:
+                        step += 1
+                        try:
+                            task_manager.update_progress("collect", step, "Checking Hacker News...")
+                            from collectors import hackernews_collector
+                            stats = hackernews_collector.collect_posts(keywords)
+                            all_stats.append(stats)
+                        except Exception as e:
+                            logger.error(f"HN: {e}")
 
                     # Mastodon
-                    try:
-                        task_manager.update_progress("collect", 4, "Scraping Mastodon...")
-                        from collectors import mastodon_collector
-                        stats = mastodon_collector.collect_posts(keywords)
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"Mastodon: {e}")
+                    if "mastodon" in sources:
+                        step += 1
+                        try:
+                            task_manager.update_progress("collect", step, "Scraping Mastodon...")
+                            from collectors import mastodon_collector
+                            stats = mastodon_collector.collect_posts(keywords)
+                            all_stats.append(stats)
+                        except Exception as e:
+                            logger.error(f"Mastodon: {e}")
 
                     # Dev.to
-                    try:
-                        task_manager.update_progress("collect", 5, "Fetching from Dev.to...")
-                        from collectors import devto_collector
-                        stats = devto_collector.collect_posts(keywords)
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"Dev.to: {e}")
+                    if "devto" in sources:
+                        step += 1
+                        try:
+                            task_manager.update_progress("collect", step, "Fetching from Dev.to...")
+                            from collectors import devto_collector
+                            stats = devto_collector.collect_posts(keywords)
+                            all_stats.append(stats)
+                        except Exception as e:
+                            logger.error(f"Dev.to: {e}")
 
                     task_manager.complete_task("collect", "Collection finished successfully", {"stats": all_stats})
                     logger.info(f"Background collect finished: {all_stats}")
@@ -182,12 +174,12 @@ def create_app() -> Flask:
                     task_manager.fail_task("collect", str(e))
                     logger.error(f"Background collect error: {e}")
 
-            task_manager.start_task("collect", total=5, message="Starting collection process...")
+            task_manager.start_task("collect", total=len(sources), message=f"Collecting from {', '.join(sources)}...")
             thread = threading.Thread(target=run, daemon=True)
             thread.start()
             return jsonify({
                 "status": "started",
-                "message": "Collection started across all platforms",
+                "message": f"Collection started for: {', '.join(sources)}",
             })
         except Exception as e:
             logger.error(f"Error starting collection: {e}")

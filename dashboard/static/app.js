@@ -375,10 +375,34 @@ function updateSliderLabel(slider) {
     if (label) label.textContent = parseFloat(slider.value).toFixed(2);
 }
 
-// ─── Trigger Actions ───────────────────────────────
-async function triggerCollect() {
+// ─── Source Picker Dropdown ────────────────────────
+function toggleCollectMenu() {
+    const menu = document.getElementById('collect-menu');
+    menu.classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('collect-dropdown');
+    if (dropdown && !dropdown.contains(e.target)) {
+        document.getElementById('collect-menu').classList.remove('open');
+    }
+});
+
+async function runCollect() {
+    const checkboxes = document.querySelectorAll('#collect-menu input[type="checkbox"]:checked');
+    const sources = Array.from(checkboxes).map(cb => cb.value);
+    if (sources.length === 0) {
+        showToast('Select at least one source', 'error');
+        return;
+    }
+    document.getElementById('collect-menu').classList.remove('open');
     try {
-        const res = await fetchAPI('/api/collect', { method: 'POST' });
+        const res = await fetchAPI('/api/collect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sources }),
+        });
         showToast(res.message);
         startTaskPolling('collect');
     } catch (err) {

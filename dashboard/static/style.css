@@ -243,6 +243,134 @@ body {
     }
 }
 
+/* --- Collect Source Picker Dropdown --- */
+.collect-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-arrow {
+    font-size: 0.7em;
+    margin-left: 2px;
+    opacity: 0.6;
+    transition: transform 0.2s ease;
+}
+
+.collect-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 240px;
+    background: rgba(17, 24, 39, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px 0;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.collect-menu.open {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+    animation: dropdownIn 0.2s ease forwards;
+}
+
+@keyframes dropdownIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.source-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    transition: background 0.15s ease;
+    white-space: nowrap;
+}
+
+.source-option:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.source-option input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent, #6366f1);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.source-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.source-badge {
+    margin-left: auto;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.source-badge.free {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.source-badge.api {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.collect-menu-actions {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 12px 6px;
+    margin-top: 4px;
+}
+
+.btn-primary {
+    background: var(--accent, #6366f1);
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.btn-primary:hover {
+    background: var(--accent-light, #818cf8);
+    transform: translateY(-1px);
+}
+
+.btn-sm {
+    padding: 7px 14px;
+    font-size: 0.8rem;
+}
+
 .btn-icon {
     font-size: 0.9em;
 }

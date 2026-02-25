@@ -23,9 +23,37 @@
             <span class="header-badge">Phase 1</span>
         </div>
         <div class="header-right">
-            <button class="btn btn-secondary" id="btn-collect" onclick="triggerCollect()">
-                <span class="btn-icon">🔍</span> Collect Now
-            </button>
+            <div class="collect-dropdown" id="collect-dropdown">
+                <button class="btn btn-secondary" id="btn-collect" onclick="toggleCollectMenu()">
+                    <span class="btn-icon">🔍</span> Collect <span class="dropdown-arrow">▾</span>
+                </button>
+                <div class="collect-menu" id="collect-menu">
+                    <label class="source-option">
+                        <input type="checkbox" value="hackernews" checked> <span class="source-icon">🟠</span> Hacker
+                        News
+                        <span class="source-badge free">Free</span>
+                    </label>
+                    <label class="source-option">
+                        <input type="checkbox" value="devto" checked> <span class="source-icon">🟣</span> Dev.to
+                        <span class="source-badge free">Free</span>
+                    </label>
+                    <label class="source-option">
+                        <input type="checkbox" value="mastodon" checked> <span class="source-icon">🔵</span> Mastodon
+                        <span class="source-badge free">Free</span>
+                    </label>
+                    <label class="source-option">
+                        <input type="checkbox" value="reddit"> <span class="source-icon">🟡</span> Reddit
+                        <span class="source-badge api">API Key</span>
+                    </label>
+                    <label class="source-option">
+                        <input type="checkbox" value="apify"> <span class="source-icon">🟢</span> Apify
+                        <span class="source-badge api">API Key</span>
+                    </label>
+                    <div class="collect-menu-actions">
+                        <button class="btn btn-primary btn-sm" onclick="runCollect()">▶ Run Collection</button>
+                    </div>
+                </div>
+            </div>
             <button class="btn btn-secondary" id="btn-analyze" onclick="triggerAnalyze()">
                 <span class="btn-icon">🧠</span> Analyze Now
             </button>
