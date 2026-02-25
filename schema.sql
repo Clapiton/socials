@@ -81,7 +81,10 @@ CREATE TABLE IF NOT EXISTS leads (
     post_title TEXT,
     post_content TEXT,
     post_url TEXT,
-    status TEXT DEFAULT 'new',  -- 'new', 'contacted', 'replied', 'converted', 'skipped'
+    outreach_subject TEXT,
+    outreach_body TEXT,
+    contact_email TEXT,
+    status TEXT DEFAULT 'new',  -- 'new', 'contacted', 'replied'
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(analyzed_post_id)

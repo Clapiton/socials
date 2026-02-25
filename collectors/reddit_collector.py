@@ -86,7 +86,7 @@ def collect_posts(limit_per_sub: int = 25) -> dict:
                 # Build post data
                 post_data = {
                     "platform": "reddit",
-                    "post_id": submission.id,
+                    "post_id": str(submission.id),
                     "author": str(submission.author) if submission.author else "[deleted]",
                     "title": submission.title,
                     "content": submission.selftext or submission.title,

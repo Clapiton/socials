@@ -122,12 +122,11 @@ def insert_analysis(analysis_data: dict) -> dict | None:
 
 
 def get_leads(limit: int = 50, offset: int = 0) -> list[dict]:
-    """Fetch analyzed posts where is_frustrated = true, ordered by confidence desc."""
+    """Fetch qualified leads from the leads table, ordered by confidence desc."""
     client = get_client()
     result = (
-        client.table("analyzed_posts")
-        .select("*, raw_posts(*)")
-        .eq("is_frustrated", True)
+        client.table("leads")
+        .select("*")
         .order("confidence", desc=True)
         .range(offset, offset + limit - 1)
         .execute()
@@ -152,6 +151,9 @@ def insert_lead(analyzed_post: dict, raw_post: dict) -> dict | None:
         "post_title": raw_post.get("title", ""),
         "post_content": raw_post.get("content", ""),
         "post_url": raw_post.get("url", ""),
+        "outreach_subject": analyzed_post.get("outreach_subject"),
+        "outreach_body": analyzed_post.get("outreach_body"),
+        "contact_email": analyzed_post.get("contact_email"),
         "status": "new",
     }
     try:
@@ -212,11 +214,11 @@ def update_outreach_status(outreach_id: str, status: str, response: str | None =
 
 
 def get_lead_by_id(lead_id: str) -> dict | None:
-    """Fetch a single lead (analyzed_post) by ID with raw post data."""
+    """Fetch a single lead from the leads table by its unique ID."""
     client = get_client()
     result = (
-        client.table("analyzed_posts")
-        .select("*, raw_posts(*)")
+        client.table("leads")
+        .select("*")
         .eq("id", lead_id)
         .execute()
     )

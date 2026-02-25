@@ -21,8 +21,9 @@ BASE_URL = "https://api.apify.com/v2"
 # ── Actor registry ───────────────────────────────────────────────────────────
 ACTORS = {
     "reddit": {
-        "actor_id": "trudax/reddit-scraper",
+        "actor_id": "viralanalyzer~reddit-scraper",
         "map": {  # Apify output field → raw_posts field
+            "id": "post_id",
             "title": "title",
             "body": "content",
             "author": "author",
@@ -32,8 +33,9 @@ ACTORS = {
         },
     },
     "twitter": {
-        "actor_id": "apidojo/tweet-scraper",
+        "actor_id": "nexgendata~twitter-scraper",
         "map": {
+            "id": "post_id",
             "full_text": "content",
             "user.screen_name": "author",
             "tweet_url": "url",
@@ -41,8 +43,9 @@ ACTORS = {
         },
     },
     "linkedin": {
-        "actor_id": "anchor/linkedin-post-search-scraper",
+        "actor_id": "api_massta~linkedin-scraper",
         "map": {
+            "id": "post_id",
             "text": "content",
             "authorName": "author",
             "url": "url",
@@ -50,8 +53,9 @@ ACTORS = {
         },
     },
     "facebook": {
-        "actor_id": "apify/facebook-posts-scraper",
+        "actor_id": "apify~facebook-posts-scraper",
         "map": {
+            "id": "post_id",
             "text": "content",
             "userName": "author",
             "url": "url",
@@ -59,8 +63,9 @@ ACTORS = {
         },
     },
     "instagram": {
-        "actor_id": "apify/instagram-scraper",
+        "actor_id": "apify~instagram-scraper",
         "map": {
+            "id": "post_id",
             "caption": "content",
             "ownerUsername": "author",
             "url": "url",
@@ -124,6 +129,7 @@ def _map_to_post(item: dict, platform: str, field_map: dict) -> dict:
     """Map an Apify result item to our raw_posts schema."""
     post = {
         "platform": platform,
+        "post_id": "",
         "title": "",
         "content": "",
         "author": "",
@@ -135,6 +141,13 @@ def _map_to_post(item: dict, platform: str, field_map: dict) -> dict:
         val = _nested_get(item, apify_field)
         if val is not None:
             post[our_field] = val
+    
+    # Ensure post_id exists (fallback to URL hash or UUID)
+    if not post.get("post_id"):
+        import hashlib
+        identifier = post.get("url") or post.get("content") or post.get("title") or str(time.time())
+        post["post_id"] = f"{platform}-{hashlib.md5(identifier.encode()).hexdigest()[:12]}"
+    
     return post
 
 
@@ -303,9 +316,23 @@ def _process_items(items: list[dict], platform: str, field_map: dict, keywords: 
 def collect_all(keywords: list[str], subreddits: list[str] | None = None, limit: int = 25) -> list[dict]:
     """Run all Apify collectors and return combined results."""
     results = []
-    results.append(collect_reddit(keywords, subreddits or ["freelance"], limit))
+    # Use a default subreddit if none provided
+    subs = subreddits or ["freelance", "webdev"]
+    results.append(collect_reddit(keywords, subs, limit))
     results.append(collect_twitter(keywords, limit))
     results.append(collect_linkedin(keywords, limit))
     results.append(collect_facebook(keywords, limit))
     results.append(collect_instagram(keywords, limit))
     return results
+
+
+def collect_posts(keywords: list[str]) -> dict:
+    """Entry point for app.py to run all Apify collectors."""
+    results = collect_all(keywords)
+    # Combine stats for the dashboard
+    combined = {
+        "platform": "social_bundle",
+        "posts_inserted": sum(r.get("posts_inserted", 0) for r in results if isinstance(r, dict)),
+        "duplicates_skipped": sum(r.get("duplicates_skipped", 0) for r in results if isinstance(r, dict)),
+    }
+    return combined

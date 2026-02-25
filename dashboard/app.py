@@ -130,21 +130,12 @@ def create_app() -> Flask:
                     except Exception as e:
                         logger.error(f"HN: {e}")
 
-                    # Mastodon
-                    try:
-                        from collectors import mastodon_collector
-                        instances_raw = settings.get("mastodon_instances", "mastodon.social")
-                        instances = [i.strip() for i in instances_raw.split(",") if i.strip()]
-                        stats = mastodon_collector.collect_posts(keywords, instances=instances)
-                        all_stats.append(stats)
-                    except Exception as e:
-                        logger.error(f"Mastodon: {e}")
 
                     # Reddit (old collector)
                     try:
                         task_manager.update_progress("collect", 1, "Polling Reddit Subreddits...")
-                        from collectors import reddit_monitor
-                        stats = reddit_monitor.poll_subreddits(keywords)
+                        from collectors import reddit_collector
+                        stats = reddit_collector.collect_posts()
                         all_stats.append(stats)
                     except Exception as e:
                         logger.error(f"Reddit: {e}")
@@ -161,8 +152,8 @@ def create_app() -> Flask:
                     # Hacker News
                     try:
                         task_manager.update_progress("collect", 3, "Checking Hacker News...")
-                        from collectors import hn_collector
-                        stats = hn_collector.collect_posts(keywords)
+                        from collectors import hackernews_collector
+                        stats = hackernews_collector.collect_posts(keywords)
                         all_stats.append(stats)
                     except Exception as e:
                         logger.error(f"Hacker News: {e}")
@@ -271,7 +262,6 @@ def create_app() -> Flask:
     @app.route("/api/outreach/generate", methods=["POST"])
     def api_generate_outreach():
         try:
-            from outreach.message_generator import generate_outreach_message
             data = request.get_json()
             if not data or "lead_id" not in data:
                 return jsonify({"error": "lead_id required"}), 400
@@ -280,13 +270,21 @@ def create_app() -> Flask:
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
 
-            message = generate_outreach_message(
-                lead=lead,
-                channel=data.get("channel", "email"),
-            )
-            return jsonify(message)
+            # Return the pre-generated message from Supabase (enriched by n8n)
+            if lead.get("outreach_subject") and lead.get("outreach_body"):
+                return jsonify({
+                    "subject": lead["outreach_subject"],
+                    "body": lead["outreach_body"],
+                    "contact_info": lead.get("contact_email", "")
+                })
+
+            return jsonify({
+                "status": "pending",
+                "message": "Enrichment in progress. Please wait a few seconds for n8n to generate the draft."
+            }), 202
+            
         except Exception as e:
-            logger.error(f"Error generating outreach: {e}")
+            logger.error(f"Error fetching outreach: {e}")
             return jsonify({"error": str(e)}), 500
 
     # ─── API: Log Outreach Result ─────────────────────
@@ -314,11 +312,9 @@ def create_app() -> Flask:
     # ─── API: Send Outreach (Generate + Log) ──────────
     @app.route("/api/outreach/send", methods=["POST"])
     def api_send_outreach():
-        """Generate message and log as draft in one call."""
+        """Log the n8n-generated draft to the outreach table."""
         try:
-            from outreach.message_generator import generate_outreach_message
             from datetime import datetime, timezone
-
             data = request.get_json()
             if not data or "lead_id" not in data:
                 return jsonify({"error": "lead_id required"}), 400
@@ -327,17 +323,18 @@ def create_app() -> Flask:
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
 
-            # Generate message
-            message = generate_outreach_message(
-                lead=lead,
-                channel=data.get("channel", "email"),
-            )
+            # Ensure we have the n8n-generated draft
+            if not lead.get("outreach_subject") or not lead.get("outreach_body"):
+                return jsonify({
+                    "status": "pending",
+                    "message": "Enrichment in progress. Cannot log draft until n8n finishes."
+                }), 202
 
             # Log as draft
             outreach_data = {
                 "analyzed_post_id": data["lead_id"],
                 "channel": data.get("channel", "email"),
-                "message_sent": f"Subject: {message['subject']}\n\n{message['body']}",
+                "message_sent": f"Subject: {lead['outreach_subject']}\n\n{lead['outreach_body']}",
                 "status": "draft",
                 "sent_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -345,11 +342,14 @@ def create_app() -> Flask:
 
             return jsonify({
                 "status": "draft_created",
-                "message": message,
+                "message": {
+                    "subject": lead["outreach_subject"],
+                    "body": lead["outreach_body"]
+                },
                 "outreach": outreach_record,
             })
         except Exception as e:
-            logger.error(f"Error sending outreach: {e}")
+            logger.error(f"Error logging outreach: {e}")
             return jsonify({"error": str(e)}), 500
 
     # ─── API: Webhook for n8n ─────────────────────────

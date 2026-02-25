@@ -69,6 +69,7 @@ def collect_posts(keywords: list[str], limit: int = 30) -> dict:
 
         post_data = {
             "platform": "devto",
+            "post_id": str(article.get("id", "")),
             "title": title[:500],
             "content": description[:2000],
             "author": user.get("username") or user.get("name") or "",

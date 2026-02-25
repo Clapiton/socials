@@ -98,6 +98,7 @@ def _collect_from_instance(
 
         post_data = {
             "platform": "mastodon",
+            "post_id": str(status.get("id", "")),
             "title": "",
             "content": text[:2000],
             "author": f"{author}@{instance}" if author else "",

@@ -94,6 +94,7 @@ def collect_posts(keywords: list[str], limit: int = 50, search_type: str = "stor
 
         post_data = {
             "platform": "hackernews",
+            "post_id": str(object_id),
             "title": title[:500] if title else "",
             "content": comment_text[:2000] if comment_text else title[:2000],
             "author": author,

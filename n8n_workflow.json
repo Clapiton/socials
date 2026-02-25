@@ -1,5 +1,5 @@
 {
-    "name": "Social Listener — Lead to Gmail Draft",
+    "name": "Social Listener — Lead Enrichment & Outreach",
     "nodes": [
         {
             "parameters": {
@@ -51,34 +51,33 @@
         {
             "parameters": {
                 "promptType": "define",
-                "text": "=Generate a personalized outreach email for this lead.\n\nPlatform: {{ $json.platform }}\nAuthor: {{ $json.author }}\nPost Title: {{ $json.post_title }}\nPost Content: {{ $json.post_content }}\nFrustration Reason: {{ $json.reason }}\nSuggested Service: {{ $json.suggested_service }}\nConfidence: {{ $json.confidence }}\n\nRules:\n- Write a subject line (5-8 words) and email body\n- Keep it under 150 words\n- Be empathetic, not salesy\n- Don't mention which platform you found them on\n- Include a gentle call to action\n- Sound like a real person\n\nRespond with ONLY valid JSON:\n{\"subject\": \"the subject\", \"body\": \"the email body\"}",
+                "text": "=You are tasked with finding a professional contact method (email or professional profile) and generating a personalized outreach email for the following lead:\n\nLead Info:\n- Platform: {{ $json.platform }}\n- Author: {{ $json.author }}\n- Post Title: {{ $json.post_title }}\n- Post Content: {{ $json.post_content }}\n- Frustrated Lead Reason: {{ $json.reason }}\n- Suggested Solution: {{ $json.suggested_service }}\n\nSTEP 1: Use your tools to find more information about the author. Search Google/socials to find their email, website, or LinkedIn profile.\nSTEP 2: Once you have enough context or a contact method, write a personalized email.\n\nRules:\n- Write a subject line (5-8 words) and email body\n- Keep it under 150 words\n- Be empathetic, not salesy\n- Sound like a real person\n\nRespond with ONLY valid JSON:\n{\"subject\": \"the subject\", \"body\": \"the email body\", \"contact_info\": \"the email or link you found\"}",
                 "options": {
-                    "systemMessage": "You are a friendly business development specialist who writes warm, empathetic outreach emails. You help people who are frustrated and struggling with their projects. Never be pushy or use corporate jargon. Always sound genuine and helpful."
+                    "systemMessage": "You are a friendly business development specialist who writes warm, empathetic outreach emails. You have access to tools to find contact information. Your priority is finding a professional email address for the lead before drafting the message."
                 }
             },
             "type": "@n8n/n8n-nodes-langchain.agent",
-            "typeVersion": 3.1,
+            "typeVersion": 1.7,
             "position": [
-                440,
+                620,
                 0
             ],
             "id": "a1b2c3d4-0003-4000-8000-000000000003",
-            "name": "AI Agent: Generate Message"
+            "name": "AI Agent: Enrich & Generate"
         },
         {
             "parameters": {
                 "model": {
                     "__rl": true,
                     "mode": "list",
-                    "value": "gpt-4o-mini"
+                    "value": "gpt-4o"
                 },
-                "builtInTools": {},
                 "options": {}
             },
             "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-            "typeVersion": 1.3,
+            "typeVersion": 1.2,
             "position": [
-                340,
+                480,
                 220
             ],
             "id": "a1b2c3d4-0004-4000-8000-000000000004",
@@ -91,13 +90,55 @@
             }
         },
         {
+            "parameters": {},
+            "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+            "typeVersion": 1,
+            "position": [
+                640,
+                220
+            ],
+            "id": "a1b2c3d4-0008-4000-8000-000000000008",
+            "name": "Google Search (SerpApi)",
+            "credentials": {
+                "serpApi": {
+                    "id": "REPLACE_WITH_YOUR_SERPAPI_CREDENTIAL_ID",
+                    "name": "SerpApi Account"
+                }
+            }
+        },
+        {
             "parameters": {
-                "jsCode": "// Parse the AI response to extract subject and body\nconst output = $input.first().json.output || $input.first().json.text || '';\n\nlet parsed;\ntry {\n  // Try to extract JSON from the response\n  const jsonMatch = output.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(jsonMatch ? jsonMatch[0] : output);\n} catch (e) {\n  parsed = {\n    subject: 'Quick question about your project',\n    body: output\n  };\n}\n\nreturn [{\n  json: {\n    subject: parsed.subject || 'Quick question about your project',\n    body: parsed.body || output,\n    lead_id: $('Fetch Lead from Supabase').first().json.id,\n    analyzed_post_id: $('Fetch Lead from Supabase').first().json.analyzed_post_id\n  }\n}];"
+                "name": "apify_scraper",
+                "description": "Scrapes social media profiles or websites to find email addresses and professional bios. Input should be a JSON object with 'url' and 'platform'.",
+                "method": "POST",
+                "url": "=https://api.apify.com/v2/acts/apify~{{ $json.platform }}-scraper/runs?token=REPLACE_WITH_YOUR_APIFY_TOKEN",
+                "jsonParameters": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "startUrls",
+                            "value": "={{ $json.url }}"
+                        }
+                    ]
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+            "typeVersion": 1,
+            "position": [
+                800,
+                220
+            ],
+            "id": "a1b2c3d4-0009-4000-8000-000000000009",
+            "name": "Apify Tool"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Parse the AI response to extract subject and body\nconst output = $input.first().json.output || $input.first().json.text || '';\n\nlet parsed;\ntry {\n  // Try to extract JSON from the response\n  const jsonMatch = output.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(jsonMatch ? jsonMatch[0] : output);\n} catch (e) {\n  parsed = {\n    subject: 'Quick question about your project',\n    body: output\n  };\n}\n\nreturn [{\n  json: {\n    subject: parsed.subject || 'Quick question about your project',\n    body: parsed.body || output,\n    contact_info: parsed.contact_info || '',\n    lead_id: $('Fetch Lead from Supabase').first().json.id,\n    analyzed_post_id: $('Fetch Lead from Supabase').first().json.analyzed_post_id\n  }\n}];"
             },
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [
-                660,
+                1020,
                 0
             ],
             "id": "a1b2c3d4-0005-4000-8000-000000000005",
@@ -114,7 +155,7 @@
             "type": "n8n-nodes-base.gmail",
             "typeVersion": 2.1,
             "position": [
-                880,
+                1240,
                 0
             ],
             "id": "a1b2c3d4-0006-4000-8000-000000000006",
@@ -137,14 +178,17 @@
                     "mappingMode": "defineBelow",
                     "value": {
                         "id": "={{ $json.lead_id }}",
-                        "status": "contacted"
+                        "outreach_subject": "={{ $json.subject }}",
+                        "outreach_body": "={{ $json.body }}",
+                        "contact_email": "={{ $json.contact_info }}",
+                        "status": "enriched"
                     }
                 }
             },
             "type": "n8n-nodes-base.supabase",
             "typeVersion": 1,
             "position": [
-                1100,
+                1460,
                 0
             ],
             "id": "a1b2c3d4-0007-4000-8000-000000000007",
@@ -173,7 +217,7 @@
             "main": [
                 [
                     {
-                        "node": "AI Agent: Generate Message",
+                        "node": "AI Agent: Enrich & Generate",
                         "type": "main",
                         "index": 0
                     }
@@ -184,14 +228,36 @@
             "ai_languageModel": [
                 [
                     {
-                        "node": "AI Agent: Generate Message",
+                        "node": "AI Agent: Enrich & Generate",
                         "type": "ai_languageModel",
                         "index": 0
                     }
                 ]
             ]
         },
-        "AI Agent: Generate Message": {
+        "Google Search (SerpApi)": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent: Enrich & Generate",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Apify Tool": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "AI Agent: Enrich & Generate",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Agent: Enrich & Generate": {
             "main": [
                 [
                     {
@@ -225,17 +291,10 @@
             ]
         }
     },
-    "pinData": {},
     "settings": {
         "executionOrder": "v1"
     },
-    "staticData": null,
     "meta": {
         "templateCredsSetupCompleted": true
-    },
-    "tags": [
-        {
-            "name": "Social Listener"
-        }
-    ]
+    }
 }
