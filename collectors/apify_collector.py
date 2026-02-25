@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Apify-based collectors — scrape Reddit, Twitter/X, LinkedIn, Facebook, Instagram
+Apify-based collectors — scrape Reddit, Twitter/X, Facebook
 via Apify actors.  Only needs a single APIFY_API_TOKEN in .env.
 """
 
@@ -21,55 +21,35 @@ BASE_URL = "https://api.apify.com/v2"
 # ── Actor registry ───────────────────────────────────────────────────────────
 ACTORS = {
     "reddit": {
-        "actor_id": "viralanalyzer~reddit-scraper",
+        "actor_id": "trudax~reddit-scraper",
         "map": {  # Apify output field → raw_posts field
             "id": "post_id",
             "title": "title",
             "body": "content",
-            "author": "author",
+            "username": "author",
             "url": "url",
-            "score": "score",
-            "subreddit": "subreddit",
+            "upVotes": "score",
+            "parsedCommunityName": "subreddit",
         },
     },
     "twitter": {
-        "actor_id": "nexgendata~twitter-scraper",
-        "map": {
-            "id": "post_id",
-            "full_text": "content",
-            "user.screen_name": "author",
-            "tweet_url": "url",
-            "favorite_count": "score",
-        },
-    },
-    "linkedin": {
-        "actor_id": "api_massta~linkedin-scraper",
+        "actor_id": "apidojo~tweet-scraper",
         "map": {
             "id": "post_id",
             "text": "content",
-            "authorName": "author",
+            "author.userName": "author",
             "url": "url",
-            "numLikes": "score",
+            "likeCount": "score",
         },
     },
     "facebook": {
         "actor_id": "apify~facebook-posts-scraper",
         "map": {
-            "id": "post_id",
+            "postId": "post_id",
             "text": "content",
-            "userName": "author",
+            "pageName": "author",
             "url": "url",
             "likes": "score",
-        },
-    },
-    "instagram": {
-        "actor_id": "apify~instagram-scraper",
-        "map": {
-            "id": "post_id",
-            "caption": "content",
-            "ownerUsername": "author",
-            "url": "url",
-            "likesCount": "score",
         },
     },
 }
@@ -160,7 +140,7 @@ def _matches_keywords(text: str, keywords: list[str]) -> bool:
 # ── Platform-specific collect functions ──────────────────────────────────────
 
 def collect_reddit(keywords: list[str], subreddits: list[str], limit: int = 25) -> dict:
-    """Collect Reddit posts via Apify."""
+    """Collect Reddit posts via Apify (trudax/reddit-scraper)."""
     if not APIFY_TOKEN:
         log.warning("APIFY_API_TOKEN not set — skipping Reddit (Apify)")
         return {"platform": "reddit", "source": "apify", "posts_inserted": 0, "skipped": True}
@@ -169,7 +149,8 @@ def collect_reddit(keywords: list[str], subreddits: list[str], limit: int = 25) 
     run_input = {
         "startUrls": [{"url": f"https://www.reddit.com/r/{sub}/new/"} for sub in subreddits],
         "maxItems": limit * len(subreddits),
-        "sort": "new",
+        "sort": "New",
+        "type": "posts",
     }
 
     try:
@@ -182,16 +163,16 @@ def collect_reddit(keywords: list[str], subreddits: list[str], limit: int = 25) 
 
 
 def collect_twitter(keywords: list[str], limit: int = 25) -> dict:
-    """Collect tweets via Apify."""
+    """Collect tweets via Apify (apidojo/tweet-scraper)."""
     if not APIFY_TOKEN:
         log.warning("APIFY_API_TOKEN not set — skipping Twitter")
         return {"platform": "twitter", "source": "apify", "posts_inserted": 0, "skipped": True}
 
     actor = ACTORS["twitter"]
-    search_query = " OR ".join(keywords[:5])  # Twitter search supports OR
+    search_queries = [kw for kw in keywords[:5]]
     run_input = {
-        "searchTerms": [search_query],
-        "maxTweets": limit,
+        "searchTerms": search_queries,
+        "maxItems": limit,
         "sort": "Latest",
     }
 
@@ -204,37 +185,21 @@ def collect_twitter(keywords: list[str], limit: int = 25) -> dict:
     return _process_items(items, "twitter", actor["map"], keywords)
 
 
-def collect_linkedin(keywords: list[str], limit: int = 25) -> dict:
-    """Collect LinkedIn posts via Apify."""
-    if not APIFY_TOKEN:
-        log.warning("APIFY_API_TOKEN not set — skipping LinkedIn")
-        return {"platform": "linkedin", "source": "apify", "posts_inserted": 0, "skipped": True}
-
-    actor = ACTORS["linkedin"]
-    run_input = {
-        "searchTerms": keywords[:5],
-        "maxResults": limit,
-    }
-
-    try:
-        items = _run_actor(actor["actor_id"], run_input)
-    except Exception as e:
-        log.error("LinkedIn Apify error: %s", e)
-        return {"platform": "linkedin", "source": "apify", "posts_inserted": 0, "error": str(e)}
-
-    return _process_items(items, "linkedin", actor["map"], keywords)
-
-
 def collect_facebook(keywords: list[str], limit: int = 25) -> dict:
-    """Collect Facebook group posts via Apify."""
+    """Collect Facebook page posts via Apify (apify/facebook-posts-scraper).
+    Requires Facebook page URLs — searches are not supported by this actor.
+    """
     if not APIFY_TOKEN:
         log.warning("APIFY_API_TOKEN not set — skipping Facebook")
         return {"platform": "facebook", "source": "apify", "posts_inserted": 0, "skipped": True}
 
     actor = ACTORS["facebook"]
+    # This actor needs page/profile URLs, not search terms.
+    # For keyword-based discovery, we construct search URLs as a fallback.
     run_input = {
-        "searchTerms": keywords[:5],
+        "startUrls": [{"url": f"https://www.facebook.com/search/posts/?q={kw}"} for kw in keywords[:3]],
         "maxPosts": limit,
+        "maxPostComments": 0,
     }
 
     try:
@@ -244,28 +209,6 @@ def collect_facebook(keywords: list[str], limit: int = 25) -> dict:
         return {"platform": "facebook", "source": "apify", "posts_inserted": 0, "error": str(e)}
 
     return _process_items(items, "facebook", actor["map"], keywords)
-
-
-def collect_instagram(keywords: list[str], limit: int = 25) -> dict:
-    """Collect Instagram posts via Apify."""
-    if not APIFY_TOKEN:
-        log.warning("APIFY_API_TOKEN not set — skipping Instagram")
-        return {"platform": "instagram", "source": "apify", "posts_inserted": 0, "skipped": True}
-
-    actor = ACTORS["instagram"]
-    hashtags = [kw.replace(" ", "") for kw in keywords[:5]]
-    run_input = {
-        "hashtags": hashtags,
-        "resultsLimit": limit,
-    }
-
-    try:
-        items = _run_actor(actor["actor_id"], run_input)
-    except Exception as e:
-        log.error("Instagram Apify error: %s", e)
-        return {"platform": "instagram", "source": "apify", "posts_inserted": 0, "error": str(e)}
-
-    return _process_items(items, "instagram", actor["map"], keywords)
 
 
 # ── Shared processing ───────────────────────────────────────────────────────
@@ -320,9 +263,7 @@ def collect_all(keywords: list[str], subreddits: list[str] | None = None, limit:
     subs = subreddits or ["freelance", "webdev"]
     results.append(collect_reddit(keywords, subs, limit))
     results.append(collect_twitter(keywords, limit))
-    results.append(collect_linkedin(keywords, limit))
     results.append(collect_facebook(keywords, limit))
-    results.append(collect_instagram(keywords, limit))
     return results
 
 

@@ -127,13 +127,13 @@ async function loadOverview() {
             leadsContainer.innerHTML = leads.map(lead => `
                 <div class="panel-item">
                     <div class="panel-item-header">
-                        <span class="panel-item-author">u/${lead.raw_posts?.author || '?'}</span>
+                        <span class="panel-item-author">u/${lead.author || '?'}</span>
                         <span class="badge badge-confidence ${getConfidenceClass(lead.confidence)}">${(lead.confidence * 100).toFixed(0)}%</span>
                     </div>
-                    <p class="panel-item-content">${escapeHtml(lead.raw_posts?.title || lead.raw_posts?.content || '')}</p>
+                    <p class="panel-item-content">${escapeHtml(lead.post_title || lead.post_content || '')}</p>
                     <div class="panel-item-tags">
                         <span class="badge badge-service">${escapeHtml(lead.suggested_service || 'none')}</span>
-                        ${lead.raw_posts?.subreddit ? `<span class="badge badge-subreddit">r/${lead.raw_posts.subreddit}</span>` : ''}
+                        ${lead.platform ? `<span class="badge badge-platform ${lead.platform}">${lead.platform}</span>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -219,12 +219,12 @@ async function loadLeads(direction) {
             tbody.innerHTML = leads.map(lead => `
                 <tr>
                     <td><span class="badge badge-confidence ${getConfidenceClass(lead.confidence)}">${(lead.confidence * 100).toFixed(0)}%</span></td>
-                    <td class="text-truncate">${escapeHtml(lead.raw_posts?.author || '?')}</td>
-                    <td class="text-clamp-2">${escapeHtml(lead.raw_posts?.title || lead.raw_posts?.content || '')}</td>
+                    <td class="text-truncate">${escapeHtml(lead.author || '?')}</td>
+                    <td class="text-clamp-2">${escapeHtml(lead.post_title || lead.post_content || '')}</td>
                     <td class="text-clamp-2">${escapeHtml(lead.reason || '')}</td>
                     <td><span class="badge badge-service">${escapeHtml(lead.suggested_service || 'none')}</span></td>
                     <td>${lead.sentiment_score != null ? lead.sentiment_score.toFixed(2) : '—'}</td>
-                    <td>${lead.raw_posts?.url ? `<a href="${lead.raw_posts.url}" target="_blank" rel="noopener">View ↗</a>` : '—'}</td>
+                    <td>${lead.post_url ? `<a href="${lead.post_url}" target="_blank" rel="noopener">View ↗</a>` : '—'}</td>
                     <td><button class="btn btn-small btn-primary" onclick="openOutreachModal('${lead.id}')">📧 Send</button></td>
                 </tr>
             `).join('');
