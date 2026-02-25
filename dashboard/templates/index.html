@@ -465,21 +465,39 @@
     <script src="/static/app.js"></script>
 
     <!-- Outreach Message Modal -->
-    <div class="modal-overlay" id="outreach-modal" style="display:none">
+    <div class="modal-overlay" id="outreach-modal" style="display:none"
+        onclick="if(event.target===this)closeOutreachModal()">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>📧 Outreach Message Preview</h3>
+                <h3>📧 Outreach Draft</h3>
                 <button class="btn btn-small" onclick="closeOutreachModal()">✕</button>
             </div>
-            <div class="modal-body">
-                <label class="setting-description">Subject</label>
-                <input type="text" id="modal-subject" class="setting-input" readonly>
-                <label class="setting-description" style="margin-top:0.75rem">Body</label>
-                <textarea id="modal-body" class="setting-input" rows="10" readonly></textarea>
+            <div class="modal-body-wrap" id="modal-content-area">
+                <!-- Loading state -->
+                <div id="modal-loading" class="modal-loading">
+                    <div class="spinner"></div>
+                    <p>Fetching outreach draft…</p>
+                </div>
+                <!-- Pending state -->
+                <div id="modal-pending" style="display:none" class="modal-pending">
+                    <span class="modal-pending-icon">⏳</span>
+                    <p>n8n enrichment still in progress.</p>
+                    <p class="text-muted">The AI is still generating the outreach message for this lead. Please try
+                        again in a moment.</p>
+                </div>
+                <!-- Draft state -->
+                <div id="modal-draft" style="display:none">
+                    <label class="modal-label">To</label>
+                    <input type="text" id="modal-contact" class="modal-input" placeholder="Contact email">
+                    <label class="modal-label">Subject</label>
+                    <input type="text" id="modal-subject" class="modal-input">
+                    <label class="modal-label">Message</label>
+                    <textarea id="modal-body-text" class="modal-input" rows="10"></textarea>
+                </div>
             </div>
-            <div class="modal-footer">
-                <span class="setting-description" id="modal-status"></span>
-                <button class="btn btn-primary" onclick="confirmSendOutreach()">
+            <div class="modal-footer" id="modal-footer" style="display:none">
+                <span class="modal-status" id="modal-status"></span>
+                <button class="btn btn-primary" id="modal-save-btn" onclick="confirmSendOutreach()">
                     <span class="btn-icon">📥</span> Save as Draft
                 </button>
             </div>

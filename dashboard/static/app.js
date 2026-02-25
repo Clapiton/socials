@@ -216,16 +216,59 @@ async function loadLeads(direction) {
         if (leads.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No leads detected yet</td></tr>';
         } else {
-            tbody.innerHTML = leads.map(lead => `
-                <tr>
+            tbody.innerHTML = leads.map((lead, i) => `
+                <tr class="lead-row" onclick="toggleLeadDetail('lead-detail-${i}')" style="cursor:pointer">
                     <td><span class="badge badge-confidence ${getConfidenceClass(lead.confidence)}">${(lead.confidence * 100).toFixed(0)}%</span></td>
                     <td class="text-truncate">${escapeHtml(lead.author || '?')}</td>
                     <td class="text-clamp-2">${escapeHtml(lead.post_title || lead.post_content || '')}</td>
                     <td class="text-clamp-2">${escapeHtml(lead.reason || '')}</td>
                     <td><span class="badge badge-service">${escapeHtml(lead.suggested_service || 'none')}</span></td>
                     <td>${lead.sentiment_score != null ? lead.sentiment_score.toFixed(2) : '—'}</td>
-                    <td>${lead.post_url ? `<a href="${lead.post_url}" target="_blank" rel="noopener">View ↗</a>` : '—'}</td>
-                    <td><button class="btn btn-small btn-primary" onclick="openOutreachModal('${lead.id}')">📧 Send</button></td>
+                    <td>${lead.post_url ? `<a href="${lead.post_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View ↗</a>` : '—'}</td>
+                    <td><button class="btn btn-small btn-primary" onclick="event.stopPropagation(); openOutreachModal('${lead.id}')">📧 Send</button></td>
+                </tr>
+                <tr class="lead-detail-row" id="lead-detail-${i}">
+                    <td colspan="8">
+                        <div class="lead-detail-content">
+                            <div class="lead-detail-grid">
+                                <div class="lead-detail-section">
+                                    <span class="lead-detail-label">Author</span>
+                                    <span class="lead-detail-value">${escapeHtml(lead.author || '?')}</span>
+                                </div>
+                                <div class="lead-detail-section">
+                                    <span class="lead-detail-label">Platform</span>
+                                    <span class="lead-detail-value">${escapeHtml(lead.platform || '—')}</span>
+                                </div>
+                                <div class="lead-detail-section">
+                                    <span class="lead-detail-label">Service</span>
+                                    <span class="lead-detail-value">${escapeHtml(lead.suggested_service || '—')}</span>
+                                </div>
+                                <div class="lead-detail-section">
+                                    <span class="lead-detail-label">Sentiment</span>
+                                    <span class="lead-detail-value">${lead.sentiment_score != null ? lead.sentiment_score.toFixed(2) : '—'}</span>
+                                </div>
+                            </div>
+                            ${lead.post_title ? `<div class="lead-detail-block"><span class="lead-detail-label">Title</span><p>${escapeHtml(lead.post_title)}</p></div>` : ''}
+                            <div class="lead-detail-block">
+                                <span class="lead-detail-label">Full Post</span>
+                                <p>${escapeHtml(lead.post_content || 'No content available')}</p>
+                            </div>
+                            ${lead.reason ? `<div class="lead-detail-block"><span class="lead-detail-label">Why it's a lead</span><p>${escapeHtml(lead.reason)}</p></div>` : ''}
+                            ${(lead.outreach_subject || lead.outreach_body) ? `
+                            <div class="lead-outreach-draft">
+                                <div class="lead-outreach-header">
+                                    <span class="lead-detail-label">📧 Outreach Draft</span>
+                                    ${lead.contact_email ? `<span class="lead-outreach-email">${escapeHtml(lead.contact_email)}</span>` : ''}
+                                </div>
+                                ${lead.outreach_subject ? `<div class="lead-detail-block"><span class="lead-detail-label">Subject</span><p class="lead-outreach-subject">${escapeHtml(lead.outreach_subject)}</p></div>` : ''}
+                                ${lead.outreach_body ? `<div class="lead-detail-block"><span class="lead-detail-label">Message</span><p>${escapeHtml(lead.outreach_body)}</p></div>` : ''}
+                            </div>` : `
+                            <div class="lead-outreach-pending">
+                                <span class="lead-detail-label">📧 Outreach Draft</span>
+                                <p class="text-muted">⏳ Pending — n8n has not enriched this lead yet.</p>
+                            </div>`}
+                        </div>
+                    </td>
                 </tr>
             `).join('');
         }
@@ -374,6 +417,107 @@ function updateSliderLabel(slider) {
     const label = document.getElementById(labelId);
     if (label) label.textContent = parseFloat(slider.value).toFixed(2);
 }
+// ─── Lead Detail Toggle ───────────────────────────
+function toggleLeadDetail(id) {
+    const row = document.getElementById(id);
+    if (row) row.classList.toggle('expanded');
+}
+
+// ─── Outreach Modal ───────────────────────────────
+let _currentLeadId = null;
+
+async function openOutreachModal(leadId) {
+    _currentLeadId = leadId;
+    const modal = document.getElementById('outreach-modal');
+    const loading = document.getElementById('modal-loading');
+    const pending = document.getElementById('modal-pending');
+    const draft = document.getElementById('modal-draft');
+    const footer = document.getElementById('modal-footer');
+    const status = document.getElementById('modal-status');
+
+    // Reset to loading state
+    loading.style.display = 'flex';
+    pending.style.display = 'none';
+    draft.style.display = 'none';
+    footer.style.display = 'none';
+    status.textContent = '';
+    modal.style.display = 'flex';
+
+    try {
+        const resp = await fetch(`/api/outreach/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lead_id: leadId }),
+        });
+
+        loading.style.display = 'none';
+
+        if (resp.status === 202) {
+            // n8n still processing
+            pending.style.display = 'flex';
+            return;
+        }
+
+        const data = await resp.json();
+
+        if (data.error) {
+            pending.style.display = 'flex';
+            pending.querySelector('p').textContent = data.error;
+            return;
+        }
+
+        // Populate draft fields
+        document.getElementById('modal-contact').value = data.contact_info || '';
+        document.getElementById('modal-subject').value = data.subject || '';
+        document.getElementById('modal-body-text').value = data.body || '';
+        draft.style.display = 'block';
+        footer.style.display = 'flex';
+    } catch (err) {
+        loading.style.display = 'none';
+        pending.style.display = 'flex';
+        pending.querySelector('p').textContent = 'Failed to fetch outreach draft.';
+        console.error('Outreach modal error:', err);
+    }
+}
+
+function closeOutreachModal() {
+    document.getElementById('outreach-modal').style.display = 'none';
+    _currentLeadId = null;
+}
+
+async function confirmSendOutreach() {
+    if (!_currentLeadId) return;
+
+    const btn = document.getElementById('modal-save-btn');
+    const status = document.getElementById('modal-status');
+    btn.disabled = true;
+    status.textContent = 'Saving…';
+
+    try {
+        const resp = await fetch('/api/outreach/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lead_id: _currentLeadId, channel: 'email' }),
+        });
+
+        const data = await resp.json();
+
+        if (data.status === 'draft_created') {
+            status.textContent = '✅ Draft saved!';
+            btn.textContent = '✓ Saved';
+            setTimeout(() => closeOutreachModal(), 1500);
+        } else if (data.status === 'pending') {
+            status.textContent = '⏳ ' + (data.message || 'Enrichment pending');
+        } else {
+            status.textContent = '⚠️ ' + (data.error || 'Unexpected response');
+        }
+    } catch (err) {
+        status.textContent = '❌ Network error';
+        console.error('Save draft error:', err);
+    } finally {
+        btn.disabled = false;
+    }
+}
 
 // ─── Source Picker Dropdown ────────────────────────
 function toggleCollectMenu() {
@@ -520,61 +664,4 @@ async function submitImport() {
     } catch (err) {
         showToast('❌ Import failed: ' + err.message, 'error');
     }
-}
-
-// ─── Outreach Modal ────────────────────────────────
-let currentOutreachLeadId = null;
-let currentOutreachMessage = null;
-
-async function openOutreachModal(leadId) {
-    currentOutreachLeadId = leadId;
-    const modal = document.getElementById('outreach-modal');
-    const statusEl = document.getElementById('modal-status');
-    statusEl.textContent = 'Generating message...';
-    document.getElementById('modal-subject').value = '';
-    document.getElementById('modal-body').value = '';
-    modal.style.display = 'flex';
-
-    try {
-        const message = await fetchAPI('/api/outreach/generate', {
-            method: 'POST',
-            body: JSON.stringify({ lead_id: leadId, channel: 'email' }),
-        });
-
-        currentOutreachMessage = message;
-        document.getElementById('modal-subject').value = message.subject || '';
-        document.getElementById('modal-body').value = message.body || '';
-        statusEl.textContent = 'Review the message below, then click Save as Draft.';
-    } catch (err) {
-        statusEl.textContent = '❌ Failed to generate message.';
-        showToast('❌ Message generation failed', 'error');
-    }
-}
-
-async function confirmSendOutreach() {
-    if (!currentOutreachLeadId || !currentOutreachMessage) return;
-
-    try {
-        await fetchAPI('/api/outreach/send', {
-            method: 'POST',
-            body: JSON.stringify({
-                lead_id: currentOutreachLeadId,
-                channel: 'email',
-            }),
-        });
-
-        showToast('📧 Outreach draft saved!', 'success');
-        closeOutreachModal();
-
-        // Refresh outreach tab if visible
-        if (currentTab === 'outreach') loadOutreach();
-    } catch (err) {
-        showToast('❌ Failed to save draft', 'error');
-    }
-}
-
-function closeOutreachModal() {
-    document.getElementById('outreach-modal').style.display = 'none';
-    currentOutreachLeadId = null;
-    currentOutreachMessage = null;
 }
