@@ -1571,3 +1571,72 @@ input[type="range"]::-webkit-slider-thumb:hover {
         transform: rotate(360deg);
     }
 }
+
+/* --- Mobile Responsiveness (max-width: 768px) --- */
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        padding: 1rem;
+        gap: 1rem;
+        text-align: center;
+        height: auto;
+    }
+
+    .header-right {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .tabs {
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding: 0.5rem 1rem;
+        gap: 0.4rem;
+        -webkit-overflow-scrolling: touch;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-primary);
+    }
+
+    .tab {
+        padding: 0.6rem 0.8rem;
+        white-space: nowrap;
+        font-size: 0.85rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px;
+        padding: 1rem;
+    }
+
+    .overview-panels {
+        grid-template-columns: 1fr !important;
+        padding: 0 1rem;
+    }
+
+    .modal-card {
+        width: 95%;
+        margin: 10px;
+        max-height: 90vh;
+    }
+
+    /* Fix dropdown positioning on mobile */
+    .collect-dropdown {
+        position: static;
+    }
+
+    .collect-menu {
+        left: 50%;
+        right: auto;
+        top: 145px;
+        transform: translateX(-50%) translateY(-10px);
+        width: calc(100vw - 32px);
+        max-width: 320px;
+        position: absolute;
+    }
+
+    .collect-menu.open {
+        transform: translateX(-50%) translateY(0);
+    }
+}
